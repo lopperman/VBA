@@ -30,11 +30,7 @@ Public Function DeleteFoundListRows(listObj As ListObject, field As Variant, cri
     End If
     
     Dim fieldIdx As Integer, foundRow As Long
-    If IsNumeric(field) Then
-        fieldIdx = CLng(field)
-    Else
-        fieldIdx = listObj.ListColumns(field).Index
-    End If
+    fieldIdx = GetFieldIndex(listObj, field)
     
     Dim sanityCount As Long, rCount As Long, nextRow As Long, deletedCount As Long
         
@@ -69,17 +65,23 @@ Public Function DeleteFoundListRows(listObj As ListObject, field As Variant, cri
 
 End Function
 
+Private Function GetFieldIndex(ByRef listObj As ListObject, field As Variant) As Long
+    Dim fieldIdx As Integer
+    If IsNumeric(field) Then
+        fieldIdx = CLng(field)
+    Else
+        fieldIdx = listObj.ListColumns(field).Index
+    End If
+    GetFieldIndex = fieldIdx
+End Function
+
 'Return the range in a ListObject of all the matching values in a single ListColumn
 Public Function GetFoundRange(listObj As ListObject, field As Variant, criteria As Variant) As Range
 
     Dim foundRange As Range
 
     Dim fieldIdx As Integer, foundRow As Long
-    If IsNumeric(field) Then
-        fieldIdx = CLng(field)
-    Else
-        fieldIdx = listObj.ListColumns(field).Index
-    End If
+    fieldIdx = GetFieldIndex(listObj, field)
 
     Dim firstRow As Long, lastRow As Long
     firstRow = GetFirstRowIndex(listObj, fieldIdx, criteria)
@@ -104,11 +106,7 @@ End Function
 'Returns 0 if not found,, returns -1 if [field] not sorted
 Private Function GetRowIndex(listObj As ListObject, field As Variant, criteria As Variant, firstRowIndex As Boolean, Optional sortIfNeeded As Boolean = True) As Long
     Dim fieldIdx As Integer, foundRow As Long
-    If IsNumeric(field) Then
-        fieldIdx = CLng(field)
-    Else
-        fieldIdx = listObj.ListColumns(field).Index
-    End If
+    fieldIdx = GetFieldIndex(listObj, field)
     
     With listObj
         If .ListRows.Count = 0 Then
@@ -168,11 +166,8 @@ Public Function AddSort(listObj As ListObject, field As Variant, Optional Order 
 On Error GoTo E:
 
     Dim fieldIdx As Integer, rngInfo As String
-    If IsNumeric(field) Then
-        fieldIdx = CLng(field)
-    Else
-        fieldIdx = listObj.ListColumns(field).Index
-    End If
+    fieldIdx = GetFieldIndex(listObj, field)
+    
     rngInfo = listObj.Name & "[" & listObj.ListColumns(fieldIdx).Name & "]"
     If listObj.ListRows.Count > 0 Then
         If clearFilters Then
@@ -199,11 +194,7 @@ End Function
 Public Function AddFilterSimple(listObj As ListObject, field As Variant, crit1 As Variant, Optional clearExistFilters As Boolean = False) As Long
     Dim cnt As Long
     Dim fieldIdx As Integer
-    If IsNumeric(field) Then
-        fieldIdx = CLng(field)
-    Else
-        fieldIdx = listObj.ListColumns(field).Index
-    End If
+    fieldIdx = GetFieldIndex(listObj, field)
     
     If Not listObj Is Nothing And listObj.ListRows.Count > 0 Then
         If clearExistFilters Then
