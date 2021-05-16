@@ -8,7 +8,7 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 ''
-' RangeMonger v0.0.1
+' RangeMonger v0.1.0
 ' (c) Paul Brower - https://github.com/vba-tools/vba-test
 '
 ' Utilities for working with Ranges and ListObjects
@@ -19,8 +19,104 @@ Attribute VB_Exposed = False
 ' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '
 Option Explicit
 
+'Return the range in a ListObject of all the matching values in a single ListColumn
+Public Function GetFoundRange(listObj As ListObject, field As Variant, criteria As Variant) As Range
+
+    Dim foundRange As Range
+
+    Dim fieldIdx As Integer, foundRow As Long
+    If IsNumeric(field) Then
+        fieldIdx = CLng(field)
+    Else
+        fieldIdx = listObj.ListColumns(field).Index
+    End If
+
+    Dim firstRow As Long, lastRow As Long
+    firstRow = GetFirstRowIndex(listObj, fieldIdx, criteria)
+    If firstRow > 0 Then
+        lastRow = GetLastRowIndex(listObj, fieldIdx, criteria)
+        Set foundRange = listObj.ListColumns(fieldIdx).DataBodyRange(RowIndex:=firstRow)
+        Set foundRange = foundRange.Resize(RowSize:=(lastRow - firstRow) + 1)
+    End If
+
+    Set GetFoundRange = foundRange
+
+End Function
+
+Public Function GetFirstRowIndex(listObj As ListObject, field As Variant, criteria As Variant, Optional sortIfNeeded As Boolean = True) As Long
+    GetFirstRowIndex = GetRowIndex(listObj, field, criteria, True, sortIfNeeded)
+End Function
+Public Function GetLastRowIndex(listObj As ListObject, field As Variant, criteria As Variant, Optional sortIfNeeded As Boolean = True) As Long
+    GetLastRowIndex = GetRowIndex(listObj, field, criteria, False, sortIfNeeded)
+End Function
+
+'Get ListRow Index of first or last occurence of [criteria] in ListColumn [field]
+'Returns 0 if not found,, returns -1 if [field] not sorted
+Private Function GetRowIndex(listObj As ListObject, field As Variant, criteria As Variant, firstRowIndex As Boolean, Optional sortIfNeeded As Boolean = True) As Long
+    Dim fieldIdx As Integer, foundRow As Long
+    If IsNumeric(field) Then
+        fieldIdx = CLng(field)
+    Else
+        fieldIdx = listObj.ListColumns(field).Index
+    End If
+    
+    With listObj
+        If .ListRows.Count = 0 Then
+            GetRowIndex = 0
+            GoTo Finalize:
+        End If
+        
+        ClearFilter listObj
+     
+        'Make sure [field] is sorted
+        If .Sort.SortFields.Count = 0 Then
+            If sortIfNeeded Then
+                AddSort listObj, field, clearPreviousSorts:=True
+            Else
+                GetRowIndex = -1
+                GoTo Finalize:
+            End If
+        End If
+        
+        Dim srtField As SortField, searchMode As Variant
+        Set srtField = .Sort.SortFields(1)
+        If srtField.key.column <> fieldIdx Then
+            If sortIfNeeded Then
+                AddSort listObj, field, clearPreviousSorts:=True
+            Else
+                GetRowIndex = -1
+                GoTo Finalize:
+            End If
+        End If
+        
+        If firstRowIndex Then
+            searchMode = 1
+        Else
+            searchMode = -1
+        End If
+        Dim crit As Variant
+        Dim handled As Boolean
+        If handled = False And TypeName(criteria) = "Date" Then
+            handled = True
+            crit = CLng(CDate(criteria))
+        End If
+        If handled = False Then
+            crit = criteria
+        End If
+        Dim srchRng As Range
+        Set srchRng = listObj.ListColumns(fieldIdx).DataBodyRange
+        foundRow = WorksheetFunction.IfError(WorksheetFunction.XMatch(crit, srchRng, 0, searchMode), 0)
+    End With
+    
+Finalize:
+    GetRowIndex = foundRow
+
+End Function
+
 'Add Sort to ListObject, optionally clearing previous sorts
-Public Function AddSort(listObj As ListObject, field As Variant, Optional Order As XlSortOrder = xlAscending, Optional clearPreviousSorts As Boolean = False) As Boolean
+Public Function AddSort(listObj As ListObject, field As Variant, Optional Order As XlSortOrder = xlAscending, Optional clearPreviousSorts As Boolean = False, Optional clearFilters As Boolean = True) As Boolean
+On Error GoTo E:
+
     Dim fieldIdx As Integer, rngInfo As String
     If IsNumeric(field) Then
         fieldIdx = CLng(field)
@@ -28,14 +124,25 @@ Public Function AddSort(listObj As ListObject, field As Variant, Optional Order 
         fieldIdx = listObj.ListColumns(field).Index
     End If
     rngInfo = listObj.Name & "[" & listObj.ListColumns(fieldIdx).Name & "]"
-    With listObj.Sort
-        If clearPreviousSorts = True Then
-            .SortFields.Clear
+    If listObj.ListRows.Count > 0 Then
+        If clearFilters Then
+            ClearFilter listObj
         End If
-        .SortFields.Add2 key:=Range(rngInfo), SortOn:=xlSortOnValues, Order:=Order, DataOption:=xlSortNormal
-        .header = xlYes
-        .Apply
-    End With
+        With listObj.Sort
+            If clearPreviousSorts = True Then
+                .SortFields.Clear
+            End If
+            .SortFields.Add2 key:=Range(rngInfo), SortOn:=xlSortOnValues, Order:=Order, DataOption:=xlSortNormal
+            .header = xlYes
+            .Apply
+        End With
+    End If
+   AddSort = True
+   Exit Function
+   
+E:
+   AddSort = False
+        
 End Function
 
 'Filters for exact match, Returns count of filtered rows
