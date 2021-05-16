@@ -9,7 +9,7 @@ Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 ''
 ' RangeMonger v0.1.0
-' (c) Paul Brower - https://github.com/vba-tools/vba-test
+' (c) Paul Brower - https://github.com/lopperman/VBA
 '
 ' Utilities for working with Ranges and ListObjects
 '
