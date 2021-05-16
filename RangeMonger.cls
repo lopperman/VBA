@@ -8,7 +8,7 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 ''
-' RangeMonger v0.1.0
+' RangeMonger v0.1.1
 ' (c) Paul Brower - https://github.com/lopperman/VBA
 '
 ' Utilities for working with Ranges and ListObjects
@@ -18,6 +18,56 @@ Attribute VB_Exposed = False
 ' @license GNU General Public License v3.0
 ' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '
 Option Explicit
+
+'Remove All List Rows Where [field] matches [criteria]
+'can specify full or partial match
+'Throws error if Worksheet is Protected Against Deleting ListRows
+'Returns Number of Deleted ListRows
+Public Function DeleteFoundListRows(listObj As ListObject, field As Variant, criteria As Variant, MatchType As XlLookAt, Optional MatchCase As Boolean = False) As Long
+    
+    If listObj.Range.Worksheet.ProtectContents And listObj.Range.Worksheet.Protection.AllowDeletingRows = False Then
+        Err.Raise 419, listObj, "Protected sheet does not allow deleting rows"
+    End If
+    
+    Dim fieldIdx As Integer, foundRow As Long
+    If IsNumeric(field) Then
+        fieldIdx = CLng(field)
+    Else
+        fieldIdx = listObj.ListColumns(field).Index
+    End If
+    
+    Dim sanityCount As Long, rCount As Long, nextRow As Long, deletedCount As Long
+        
+    With listObj
+        rCount = .ListRows.Count
+        Do While True
+            nextRow = 0
+            If .ListRows.Count = 0 Then
+                Exit Do
+            End If
+            Dim fnd As Range
+            Set fnd = .ListColumns(fieldIdx).DataBodyRange.find(criteria, LookAt:=MatchType, MatchCase:=MatchCase)
+            
+            If Not fnd Is Nothing Then
+                nextRow = fnd.Row - .HeaderRowRange.Row
+                If nextRow > 0 Then
+                    .ListRows(nextRow).delete
+                    deletedCount = deletedCount + 1
+                End If
+            Else
+                Exit Do
+            End If
+            
+            sanityCount = sanityCount + 1
+            If sanityCount > rCount Then
+                Exit Do
+            End If
+        Loop
+    End With
+
+    DeleteFoundListRows = deletedCount
+
+End Function
 
 'Return the range in a ListObject of all the matching values in a single ListColumn
 Public Function GetFoundRange(listObj As ListObject, field As Variant, criteria As Variant) As Range
@@ -80,7 +130,7 @@ Private Function GetRowIndex(listObj As ListObject, field As Variant, criteria A
         
         Dim srtField As SortField, searchMode As Variant
         Set srtField = .Sort.SortFields(1)
-        If srtField.key.column <> fieldIdx Then
+        If srtField.key.column <> .ListColumns(fieldIdx).Range.column Then
             If sortIfNeeded Then
                 AddSort listObj, field, clearPreviousSorts:=True
             Else
@@ -192,7 +242,7 @@ On Error GoTo E:
         GoTo Finalize:
     End If
     
-    If listObj.Range.Worksheet.Protection.AllowFiltering = False Then
+    If listObj.Range.Worksheet.EnableAutoFilter And listObj.Range.Worksheet.Protection.AllowFiltering = False Then
         Err.Raise 419, listObj, "Protected sheet does not allow filtering"
     End If
     
