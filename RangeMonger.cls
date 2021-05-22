@@ -47,7 +47,7 @@ Public Function DeleteFoundListRows(listObj As ListObject, field As Variant, cri
             If Not fnd Is Nothing Then
                 nextRow = fnd.Row - .HeaderRowRange.Row
                 If nextRow > 0 Then
-                    .ListRows(nextRow).delete
+                    .ListRows(nextRow).Delete
                     deletedCount = deletedCount + 1
                 End If
             Else
@@ -84,7 +84,7 @@ Public Function GetFoundRange(listObj As ListObject, field As Variant, criteria 
     fieldIdx = GetFieldIndex(listObj, field)
 
     Dim firstRow As Long, lastRow As Long
-    firstRow = GetFirstRowIndex(listObj, fieldIdx, criteria)
+    firstRow = GetFirstRowIndex(listObj, fieldIdx, criteria, True)
     If firstRow > 0 Then
         lastRow = GetLastRowIndex(listObj, fieldIdx, criteria)
         Set foundRange = listObj.ListColumns(fieldIdx).DataBodyRange(RowIndex:=firstRow)
@@ -120,22 +120,17 @@ Private Function GetRowIndex(listObj As ListObject, field As Variant, criteria A
         If .Sort.SortFields.Count = 0 Then
             If sortIfNeeded Then
                 AddSort listObj, field, clearPreviousSorts:=True
-            Else
-                GetRowIndex = -1
-                GoTo Finalize:
+            End If
+        Else
+            Dim srtField As SortField, searchMode As Variant
+            Set srtField = .Sort.SortFields(1)
+            If srtField.key.column <> .ListColumns(fieldIdx).Range.column Then
+                If sortIfNeeded Then
+                    AddSort listObj, field, clearPreviousSorts:=True
+                End If
             End If
         End If
         
-        Dim srtField As SortField, searchMode As Variant
-        Set srtField = .Sort.SortFields(1)
-        If srtField.key.column <> .ListColumns(fieldIdx).Range.column Then
-            If sortIfNeeded Then
-                AddSort listObj, field, clearPreviousSorts:=True
-            Else
-                GetRowIndex = -1
-                GoTo Finalize:
-            End If
-        End If
         
         If firstRowIndex Then
             searchMode = 1
@@ -153,7 +148,11 @@ Private Function GetRowIndex(listObj As ListObject, field As Variant, criteria A
         End If
         Dim srchRng As Range
         Set srchRng = listObj.ListColumns(fieldIdx).DataBodyRange
-        foundRow = WorksheetFunction.IfError(WorksheetFunction.XMatch(crit, srchRng, 0, searchMode), 0)
+        On Error Resume Next
+        Dim fR As Variant: fR = WorksheetFunction.IfError(WorksheetFunction.XMatch(crit, srchRng, 0, searchMode), 0)
+        If IsNumeric(fR) Then
+            foundRow = CLng(fR)
+        End If
     End With
     
 Finalize:
@@ -220,6 +219,37 @@ Public Function AddFilterSimple(listObj As ListObject, field As Variant, crit1 A
 
 
     AddFilterSimple = cnt
+End Function
+
+Public Function AddFilterBetween(listObj As ListObject, field As Variant, crit1 As Variant, crit2 As Variant, Optional clearExistFilters As Boolean = False) As Long
+    Dim cnt As Long
+    Dim fieldIdx As Integer
+    fieldIdx = GetFieldIndex(listObj, field)
+    
+    If Not listObj Is Nothing And listObj.ListRows.Count > 0 Then
+        If clearExistFilters Then
+            ClearFilter listObj
+        End If
+        Dim handled As Boolean
+        With listObj
+            If TypeName(crit1) = "Date" Then
+                handled = True
+                .Range.AutoFilter field:=fieldIdx, Criteria1:=">=" & Int(crit1), Operator:=xlAnd, Criteria2:="<=" & Int(crit2)
+            End If
+            If handled = False And TypeName(crit1) = "String" Then
+                handled = True
+                .Range.AutoFilter field:=fieldIdx, Criteria1:=">=" & crit1, Operator:=xlAnd, Criteria2:="<=" & crit2
+            End If
+            If handled = False And IsNumeric(crit1) Then
+                handled = True
+                .Range.AutoFilter field:=fieldIdx, Criteria1:=">=" & crit1, Operator:=xlAnd, Criteria2:="<=" & crit2
+            End If
+            cnt = WorksheetFunction.Subtotal(3, .ListColumns(fieldIdx).DataBodyRange)
+        End With
+    End If
+
+
+    AddFilterBetween = cnt
 End Function
 
 Public Function ClearFilter(listObj As ListObject) As Boolean
