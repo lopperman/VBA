@@ -8,7 +8,7 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 ''
-' RangeMonger v0.1.1
+' RangeMonger v0.1.3
 ' (c) Paul Brower - https://github.com/lopperman/VBA
 '
 ' Utilities for working with Ranges and ListObjects
@@ -18,6 +18,39 @@ Attribute VB_Exposed = False
 ' @license GNU General Public License v3.0
 ' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '
 Option Explicit
+Private l_sheetProtection As ProtectionBase
+
+'If a class implementing ProtectionBase is passed in, then if a sort/filter would fail because a sheet is protected,
+'then it will automatically be unprotected
+'the caller is required to make sure sheet is reprotected, if necessary
+Public Property Set Unprotector(protector As ProtectionBase)
+    Set l_sheetProtection = protector
+End Property
+
+Private Function Protect(wksht As Worksheet) As Boolean
+    If wksht.ProtectionMode Then
+        Protect = True
+        Exit Function
+    End If
+    
+    If Not l_sheetProtection Is Nothing Then
+        Protect = l_sheetProtection.Protect(wksht)
+    Else
+        Protect = False
+    End If
+End Function
+
+Private Function Unprotect(wksht As Worksheet) As Boolean
+    If wksht.ProtectionMode = False Then
+        Unprotect = True
+        Exit Function
+    End If
+    If Not l_sheetProtection Is Nothing Then
+        Unprotect = l_sheetProtection.Unprotect(wksht)
+    Else
+        Unprotect = False
+    End If
+End Function
 
 'Remove All List Rows Where [field] matches [criteria]
 'can specify full or partial match
@@ -26,7 +59,9 @@ Option Explicit
 Public Function DeleteFoundListRows(listObj As ListObject, field As Variant, criteria As Variant, MatchType As XlLookAt, Optional MatchCase As Boolean = False) As Long
     
     If listObj.Range.Worksheet.ProtectContents And listObj.Range.Worksheet.Protection.AllowDeletingRows = False Then
-        Err.Raise 419, listObj, "Protected sheet does not allow deleting rows"
+        If Unprotect(listObj.Parent) = False Then
+            Err.Raise 419, listObj, "Protected sheet does not allow deleting rows"
+        End If
     End If
     
     Dim fieldIdx As Integer, foundRow As Long
@@ -45,7 +80,7 @@ Public Function DeleteFoundListRows(listObj As ListObject, field As Variant, cri
             Set fnd = .ListColumns(fieldIdx).DataBodyRange.find(criteria, LookAt:=MatchType, MatchCase:=MatchCase)
             
             If Not fnd Is Nothing Then
-                nextRow = fnd.Row - .HeaderRowRange.Row
+                nextRow = fnd.row - .HeaderRowRange.row
                 If nextRow > 0 Then
                     .ListRows(nextRow).Delete
                     deletedCount = deletedCount + 1
@@ -83,12 +118,12 @@ Public Function GetFoundRange(listObj As ListObject, field As Variant, criteria 
     Dim fieldIdx As Integer, foundRow As Long
     fieldIdx = GetFieldIndex(listObj, field)
 
-    Dim firstRow As Long, lastRow As Long
+    Dim firstRow As Long, lastrow As Long
     firstRow = GetFirstRowIndex(listObj, fieldIdx, criteria, True)
     If firstRow > 0 Then
-        lastRow = GetLastRowIndex(listObj, fieldIdx, criteria)
+        lastrow = GetLastRowIndex(listObj, fieldIdx, criteria)
         Set foundRange = listObj.ListColumns(fieldIdx).DataBodyRange(RowIndex:=firstRow)
-        Set foundRange = foundRange.Resize(RowSize:=(lastRow - firstRow) + 1)
+        Set foundRange = foundRange.Resize(RowSize:=(lastrow - firstRow) + 1)
     End If
 
     Set GetFoundRange = foundRange
@@ -164,6 +199,13 @@ End Function
 Public Function AddSort(listObj As ListObject, field As Variant, Optional Order As XlSortOrder = xlAscending, Optional clearPreviousSorts As Boolean = False, Optional clearFilters As Boolean = True) As Boolean
 On Error GoTo E:
 
+    If listObj.Range.Worksheet.Protection.AllowSorting = False Then
+        If Unprotect(listObj.Range.Worksheet) = False Then
+            Err.Raise 419, listObj, "Protected sheet does not allow filtering"
+        End If
+    End If
+
+
     Dim fieldIdx As Integer, rngInfo As String
     fieldIdx = GetFieldIndex(listObj, field)
     
@@ -172,18 +214,24 @@ On Error GoTo E:
         If clearFilters Then
             ClearFilter listObj
         End If
+        Dim sortAlreadyValid As Boolean
+        sortAlreadyValid = True
         With listObj.Sort
             If clearPreviousSorts = True Then
                 .SortFields.Clear
+                .SortFields.Add2 key:=Range(rngInfo), SortOn:=xlSortOnValues, Order:=Order, DataOption:=xlSortNormal
+                .header = xlYes
+                .Apply
+            Else
+                .SortFields.Add2 key:=Range(rngInfo), SortOn:=xlSortOnValues, Order:=Order, DataOption:=xlSortNormal
+                .header = xlYes
+                .Apply
             End If
-            .SortFields.Add2 key:=Range(rngInfo), SortOn:=xlSortOnValues, Order:=Order, DataOption:=xlSortNormal
-            .header = xlYes
-            .Apply
+            
         End With
     End If
    AddSort = True
    Exit Function
-   
 E:
    AddSort = False
         
@@ -194,6 +242,13 @@ Public Function AddFilterSimple(listObj As ListObject, field As Variant, crit1 A
     Dim cnt As Long
     Dim fieldIdx As Integer
     fieldIdx = GetFieldIndex(listObj, field)
+    
+    If listObj.Range.Worksheet.Protection.AllowFiltering = False Then
+        If Unprotect(listObj.Range.Worksheet) = False Then
+            Err.Raise 419, listObj, "Protected sheet does not allow filtering"
+        End If
+    End If
+ 
     
     If Not listObj Is Nothing And listObj.ListRows.Count > 0 Then
         If clearExistFilters Then
@@ -225,6 +280,13 @@ Public Function AddFilterBetween(listObj As ListObject, field As Variant, crit1 
     Dim cnt As Long
     Dim fieldIdx As Integer
     fieldIdx = GetFieldIndex(listObj, field)
+    
+    If listObj.Range.Worksheet.Protection.AllowFiltering = False Then
+        If Unprotect(listObj.Range.Worksheet) = False Then
+            Err.Raise 419, listObj, "Protected sheet does not allow filtering"
+        End If
+    End If
+ 
     
     If Not listObj Is Nothing And listObj.ListRows.Count > 0 Then
         If clearExistFilters Then
@@ -263,8 +325,10 @@ On Error GoTo E:
         GoTo Finalize:
     End If
     
-    If listObj.Range.Worksheet.EnableAutoFilter And listObj.Range.Worksheet.Protection.AllowFiltering = False Then
-        Err.Raise 419, listObj, "Protected sheet does not allow filtering"
+    If listObj.Range.Worksheet.ProtectionMode And listObj.Range.Worksheet.Protection.AllowFiltering = False Then
+        If Unprotect(listObj.Range.Worksheet) = False Then
+            Err.Raise 419, listObj, "Protected sheet does not allow filtering"
+        End If
     End If
     
     If FilterCount(listObj) > 0 Then
