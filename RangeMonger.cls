@@ -197,7 +197,7 @@ End Function
 
 'Add Sort to ListObject, optionally clearing previous sorts
 Public Function AddSort(listObj As ListObject, field As Variant, Optional Order As XlSortOrder = xlAscending, Optional clearPreviousSorts As Boolean = False, Optional clearFilters As Boolean = True) As Boolean
-On Error GoTo E:
+On Error GoTo e:
 
     If listObj.Range.Worksheet.Protection.AllowSorting = False Then
         If Unprotect(listObj.Range.Worksheet) = False Then
@@ -232,7 +232,7 @@ On Error GoTo E:
     End If
    AddSort = True
    Exit Function
-E:
+e:
    AddSort = False
         
 End Function
@@ -315,7 +315,7 @@ Public Function AddFilterBetween(listObj As ListObject, field As Variant, crit1 
 End Function
 
 Public Function ClearFilter(listObj As ListObject) As Boolean
-On Error GoTo E:
+On Error GoTo e:
     Dim failed As Boolean
     
     If listObj Is Nothing Then
@@ -339,7 +339,7 @@ Finalize:
     ClearFilter = Not failed
     
     Exit Function
-E:
+e:
    failed = True
    Err.Raise Err.Number, Err.Source, Err.Description
    Resume Finalize:
@@ -349,15 +349,15 @@ End Function
 
 
 'Get count of enabled filters
-Public Function FilterCount(lstObj As ListObject) As Long
+Public Function FilterCount(lstobj As ListObject) As Long
     Dim fltrCount As Long
     
-    If Not lstObj Is Nothing Then
+    If Not lstobj Is Nothing Then
         Dim fltrIdx As Long
-        If lstObj.AutoFilter.Filters.Count > 0 Then
+        If lstobj.AutoFilter.Filters.Count > 0 Then
             Dim f As Variant
-            For fltrIdx = 1 To lstObj.AutoFilter.Filters.Count
-                If lstObj.AutoFilter.Filters(fltrIdx).On Then
+            For fltrIdx = 1 To lstobj.AutoFilter.Filters.Count
+                If lstobj.AutoFilter.Filters(fltrIdx).On Then
                     fltrCount = fltrCount + 1
                 End If
             Next fltrIdx
@@ -365,4 +365,48 @@ Public Function FilterCount(lstObj As ListObject) As Long
     End If
     
     FilterCount = fltrCount
+End Function
+
+'Returns true if all items in [rng] are in the listObject in validcolIdx
+Public Function RangeIsInsideListColumn(rng As Range, lstobj As ListObject, validColIdx As Long) As Boolean
+
+    If rng Is Nothing Or lstobj Is Nothing Or validColIdx = 0 Then
+        RangeIsInsideListColumn = False
+        Exit Function
+    End If
+    If rng.Count = 1 Then
+        If Intersect(rng, lstobj.ListColumns(validColIdx).DataBodyRange) Is Nothing Then
+            RangeIsInsideListColumn = False
+            Exit Function
+        Else
+            RangeIsInsideListColumn = True
+            Exit Function
+        End If
+    End If
+    
+    If rng.Areas.Count = 1 Then
+        If Intersect(rng, lstobj.ListColumns(validColIdx).DataBodyRange) Is Nothing Then
+            RangeIsInsideListColumn = False
+            Exit Function
+        Else
+            'check columns
+            If rng.Columns.Count <> 1 Then
+                RangeIsInsideListColumn = False
+                Exit Function
+            End If
+            RangeIsInsideListColumn = True
+            Exit Function
+        End If
+    Else
+        Dim rngArea As Range
+        For Each rngArea In rng.Areas
+            If RangeIsInsideListColumn(rngArea, lstobj, validColIdx) = False Then
+                RangeIsInsideListColumn = False
+                Exit Function
+            End If
+        Next rngArea
+    End If
+    
+    RangeIsInsideListColumn = True
+
 End Function
