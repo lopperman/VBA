@@ -1,5 +1,6 @@
 Attribute VB_Name = "mdlDocumentCode"
 Option Explicit
+Option Base 1
 
 Public Function GetFormulas(wb As Workbook)
     
