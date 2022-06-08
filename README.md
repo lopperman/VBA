@@ -1,11 +1,4 @@
 # VBA
 Misc VBA (Excel) Classes
 
-# RangeMonger.cls #
-## Functions ##
-- ### DeleteFoundListRows ###
-_Delete All ListObject ListRows Matching Criteria_
-
-```
-Public Function DeleteFoundListRows(listObj As ListObject, field As Variant, criteria As Variant, MatchType As XlLookAt, Optional MatchCase As Boolean = False) As Long
-```
+bit of a hodgepodge, but I'm working on an organized utility library that should be avail in a few weeks (as of this writing 2022-JUN-08) in this repo: https://github.com/lopperman/VBA-pbUtil
